@@ -63,6 +63,7 @@ replacements:
       delimiter: string
       index: int
       create: bool
+  sourceValue: string
   targets:
   - select:
       group: string
@@ -70,12 +71,16 @@ replacements:
       kind: string
       name: string
       namespace: string
+      annotationSelector: string
+      labelSelector: string
     reject:
     - group: string
       version: string
       kind: string
       name: string
       namespace: string
+      annotationSelector: string
+      labelSelector: string
     fieldPaths:
     - string
     options:
@@ -86,35 +91,46 @@ replacements:
 
 ### Field Descriptions
 
-| Field       | Required| Description | Default |
-| -----------: | :----:| ----------- | ---- |
-| `source`| :heavy_check_mark: | The source of the value |
-| `target`|:heavy_check_mark: | The N fields to write the value to |
-| `group` | | The group of the referent |
-| `version`|  | The version of the referent
-|`kind` | |The kind of the referent
-|`name` | |The name of the referent
-|`namespace`|  |The namespace of the referent
-|`select` |:heavy_check_mark: |Include objects that match this
-|`reject`| |Exclude objects that match this
-|`fieldPath`|  |The structured path to the source value | `metadata.name`
-|`fieldPaths`|  |The structured path(s) to the target nodes | `metadata.name`
-|`options`| |Options used to refine interpretation of the field
-|`delimiter`|  |Used to split/join the field
-|`index`| |Which position in the split to consider | `0`
-|`create`|  |If target field is missing, add it | `false`
+| Field                | Required | Description                                        | Default         |
+| -----------:         | :----:   | -----------                                        | ----            |
+| `source`             | &#x2714; | The source of the value                            |                 |
+| `sourceValue`        | &#x2714; | The static value to be used as source              |                 |
+| `target`             | &#x2714; | The N fields to write the value to                 |                 |
+| `group`              |          | The group of the referent                          |                 |
+| `version`            |          | The version of the referent                        |                 |
+| `kind`               |          | The kind of the referent                           |                 |
+| `name`               |          | The name of the referent                           |                 |
+| `namespace`          |          | The namespace of the referent                      |                 |
+| `labelSelector`      |          | label selection expression                         |                 |
+| `annotationSelector` |          | annotation selection expression                    |                 |
+| `select`             | &#x2714; | Include objects that match this                    |                 |
+| `reject`             |          | Exclude objects that match this                    |                 |
+| `fieldPath`          |          | The structured path to the source value            | `metadata.name` |
+| `fieldPaths`         |          | The structured path(s) to the target nodes         | `metadata.name` |
+| `options`            |          | Options used to refine interpretation of the field |                 |
+| `delimiter`          |          | Used to split/join the field                       |                 |
+| `index`              |          | Which position in the split to consider            | `0`             |
+| `create`             |          | If target field is missing, add it                 | `false`         |
 
 #### Source
-The source field is a selector that determines the source of the value by finding a
+The `source` field is a selector that determines the source of the value by finding a
 match to the specified GVKNN. All the subfields of `source` are optional,
 but the source selection must resolve to a single resource.
 
+#### SourceValue
+`sourceValue` is a scalar field to be used as the replacement value.
+`sourceValue` and `source` are mutually exclusive fields and cannot be used to gether.
+
 #### Targets
-Replacements will be applied to all targets that are matched by the `select` field and
-are NOT matched by the `reject` field, and will be applied to all listed `fieldPaths`.
+Replacements will be applied to all targets that are matched by the `select` field
+and are NOT matched by the `reject` field, and will be applied to all listed `fieldPaths`.
+\
+Subfields of `select` that are used to specify GVKNN, accept simple string values and regular expressions.
 
 ##### Reject
 The reject field is a selector that drops targets selected by select, overruling their selection.
+\
+Subfields of `reject` that are used to specify GVKNN, accept simple string values and regular expressions.
 
 For example, if we wanted to reject all Deployments named my-deploy:
 
@@ -248,8 +264,10 @@ metadata:
   name: my-secret
 ```
 
-To (1) replace the value of SOME_SECRET_NAME with the name of my-secret, and (2) to add
-a restartPolicy copied from my-pod, you can do the following:
+In the following configuration:
+- SOME_SECRET_NAME is replaced with the name of my-secret
+- restartPolicy is copied from my-pod
+- a cpu limit value is set in workload containers
 
 `kustomization.yaml`
 ```yaml
@@ -271,6 +289,20 @@ replacements:
       kind: Job
     fieldPaths:
     - spec.template.spec.containers.[name=hello].env.[name=SECRET_TOKEN].value
+- sourceValue: "500m"
+  targets:
+  - select:
+      kind: Job|Deployment # using regex to target multiple resources
+    fieldPaths:
+    - spec.template.spec.containers.*.resources.limits.cpu
+    options:
+      create: true
+  - select:
+      kind: Pod
+    fieldPaths:
+    - spec.containers.*.resources.limits.cpu
+    options:
+      create: true
 ```
 
 `my-replacement.yaml`
@@ -310,6 +342,9 @@ spec:
           value: my-secret # this value is copied from my-secret
         image: myimage
         name: hello
+	resources:
+	  limits:
+	    cpu: "500m" # this value is copied from the sourceValue field
       restartPolicy: OnFailure # this value is copied from my-pod
 ---
 apiVersion: v1
@@ -320,5 +355,8 @@ spec:
   containers:
   - image: busybox
     name: myapp-container
+    resources:
+      limits:
+        cpu: "500m"
   restartPolicy: OnFailure
 ```
