@@ -129,8 +129,8 @@ and are NOT matched by the `reject` field, and will be applied to all listed `fi
 Subfields of `select` and `reject` that are used to specify GVKNN, accept simple string values and regular expressions.
 
 ##### Label and Annotation Selectors
-`labelSelector` and `annotationSelector` allow targeting resources based on labels and annotations respectively.
-
+`labelSelector` and `annotationSelector` allow targeting multiple resources based on labels and annotations respectively.
+The syntax follows the [label/annotation selector rules](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors).
 
 Example of *equality-based* requirements syntax:
 ```yaml
